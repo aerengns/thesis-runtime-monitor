@@ -1,0 +1,32 @@
+# --- Core numerics: DTMC construction, transition matrices, PAC bounds ---
+numpy>=1.26,<2.0
+scipy>=1.11
+
+# --- Layer 2: rule DSL grammar + parser ---
+lark>=1.1.9
+
+# --- LLM calls (gpt-4o-mini for traces, gpt-4o for evaluation) ---
+openai>=1.40
+python-dotenv>=1.0
+
+# --- NLP utilities: NER for PII detection, semantic similarity ---
+spacy>=3.7,<4.0
+sentence-transformers>=3.0
+
+# --- Data handling / evaluation bookkeeping ---
+pandas>=2.2
+tqdm>=4.66
+
+# --- Testing ---
+pytest>=8.0
+
+# --- Notebooks ---
+jupyterlab>=4.2
+
+# --- Property-specific evaluation harnesses ---
+# OpenFactCheck (factuality benchmark) is installed separately: it pulls a large
+# transitive dependency set that can conflict with the pins above. Install into
+# this venv when starting the factuality evaluation work:
+#     pip install openfactcheck
+# FairEval (fairness) and AgentLeak (privacy) ship as datasets//scripts rather
+# than pip packages -- see src/evaluation/ for the loaders.
