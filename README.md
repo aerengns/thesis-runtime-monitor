@@ -39,5 +39,6 @@ cp .env.example .env   # then add your OpenAI API key
 | `rules/` | DSL rule files, one per property |
 | `tests/` | pytest suite |
 | `notebooks/` | Exploratory analysis |
+| `papers/` | The five reference papers (ProbGuard, AgentSpec, OpenFactCheck, FairEval, AgentLeak) |
 
 Status: scaffolding only — no logic implemented yet.

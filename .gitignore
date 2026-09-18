@@ -11,8 +11,5 @@ __pycache__/
 # Notebooks
 .ipynb_checkpoints/
 
-# Papers (PDFs live in ../RelevantPapers/, not tracked here)
-papers/*.pdf
-
 # macOS
 .DS_Store
