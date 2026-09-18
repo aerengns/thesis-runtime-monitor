@@ -5,8 +5,15 @@ scipy>=1.11
 # --- Layer 2: rule DSL grammar + parser ---
 lark>=1.1.9
 
-# --- LLM calls (gpt-4o-mini for traces, gpt-4o for evaluation) ---
+# --- LLM backends ---
+# System under test: local model via Ollama (free, reproducible, exposes logprobs).
+ollama>=0.6
+# The `openai` client is kept deliberately: Ollama's OpenAI-compatible endpoint at
+# /v1/chat/completions is the ONLY one that returns token logprobs, which Layer 1
+# state abstraction uses. It is not used to call OpenAI.
 openai>=1.40
+# Judge / evaluation only: Gemini free-tier key from Google AI Studio.
+google-genai>=1.0
 python-dotenv>=1.0
 
 # --- NLP utilities: NER for PII detection, semantic similarity ---

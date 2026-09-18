@@ -24,8 +24,35 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-cp .env.example .env   # then add your OpenAI API key
+cp .env.example .env
 ```
+
+### LLM backends
+
+No paid API account is required. The two roles are served by different backends:
+
+| Role | Backend | Why |
+|---|---|---|
+| **System under test** — generates the traces Layer 1 learns its DTMC from, and performs Layer 2 rewrites | Local `qwen3:4b-instruct` via [Ollama](https://ollama.com) | Free at unlimited volume, deterministic under a fixed seed, and exposes token logprobs for state abstraction |
+| **Judge** — OpenFactCheck / FairEval scoring | Gemini, free-tier key from [Google AI Studio](https://aistudio.google.com/apikey) | Higher quality where it matters; evaluation volume fits the free rate limits |
+
+```bash
+brew install ollama          # or https://ollama.com/download
+ollama serve &
+ollama pull qwen3:4b-instruct
+```
+
+Token logprobs are only returned by Ollama's OpenAI-compatible endpoint
+(`/v1/chat/completions` with `logprobs: true`), not by the native `/api/generate`.
+The `openai` package in `requirements.txt` exists to talk to that local endpoint.
+
+Note that the Gemini API key is a **free-tier developer key from AI Studio**, which is
+separate from — and not obtainable via — a consumer Gemini or Claude subscription.
+
+Because the system under test is a 4B local model rather than a frontier model, absolute
+scores are not comparable to figures published alongside OpenFactCheck, FairEval, or
+AgentLeak. The evaluation is internally consistent: all four configurations (no monitoring,
+enforcement only, prediction only, combined) run against the same SUT.
 
 ## Layout
 
