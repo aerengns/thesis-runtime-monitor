@@ -30,10 +30,19 @@ pytest>=8.0
 # --- Notebooks ---
 jupyterlab>=4.2
 
+# --- Privacy benchmark + oracle (AgentLeak) ---
+# Pinned to a commit: the released datasets under agentleak_data/ are encoded for an
+# older schema than the shipped pydantic models accept, and src/evaluation/agentleak_eval.py
+# normalises that specific mismatch. Unpinning would break scenario loading.
+agentleak @ git+https://github.com/Privatris/AgentLeak.git@1301eb9245a03bbee8694ee2b74accbc8f6fefe6
+# Required by AgentLeak's detection tiers 1 and 2, but NOT declared by its own
+# requirements.txt. Without it HybridPipeline detects nothing at all.
+presidio-analyzer>=2.2
+
 # --- Property-specific evaluation harnesses ---
 # OpenFactCheck (factuality benchmark) is installed separately: it pulls a large
 # transitive dependency set that can conflict with the pins above. Install into
 # this venv when starting the factuality evaluation work:
 #     pip install openfactcheck
-# FairEval (fairness) and AgentLeak (privacy) ship as datasets//scripts rather
-# than pip packages -- see src/evaluation/ for the loaders.
+# FairEval (fairness) ships as datasets/scripts rather than a pip package --
+# see src/evaluation/ for the loader.
