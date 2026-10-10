@@ -8,6 +8,11 @@ __pycache__/
 # Secrets
 .env
 
+# Judge cache dir: created on every run, never written to (upstream's cache is
+# in-memory only), so it is always an empty directory.
+.llm_judge_cache/
+data/.llm_judge_cache/
+
 # Notebooks
 .ipynb_checkpoints/
 
