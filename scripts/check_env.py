@@ -14,6 +14,17 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# python-dotenv is a declared dependency but nothing loaded .env, so every
+# os.getenv below reported "unset" even when the value was configured. Entry
+# points must load it explicitly; library modules deliberately do not.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+except ImportError:  # checked for properly further down
+    pass
+
 OLLAMA = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 OK, BAD, WARN = "  ok ", "FAIL ", "warn "
