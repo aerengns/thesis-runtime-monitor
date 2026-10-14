@@ -60,7 +60,7 @@ No paid API account is required. The two roles are served by different backends:
 
 | Role | Backend | Why |
 |---|---|---|
-| **System under test** — generates the traces Layer 1 learns its DTMC from, and performs Layer 2 rewrites | Local `qwen3:4b-instruct` via [Ollama](https://ollama.com) | Free at unlimited volume, deterministic under a fixed seed, and exposes token logprobs for state abstraction |
+| **System under test** — generates the traces Layer 1 learns its DTMC from, and performs Layer 2 rewrites | Local `qwen3:4b-instruct` via [Ollama](https://ollama.com) | Free at unlimited volume, reproducible under a fixed seed (cold runs, see below), and exposes token logprobs for state abstraction |
 | **Judge** — OpenFactCheck / FairEval scoring | Gemini, free-tier key from [Google AI Studio](https://aistudio.google.com/apikey) | Higher quality where it matters; evaluation volume fits the free rate limits |
 
 ```bash
@@ -69,9 +69,9 @@ ollama serve &
 ollama pull qwen3:4b-instruct
 ```
 
-Token logprobs are only returned by Ollama's OpenAI-compatible endpoint
-(`/v1/chat/completions` with `logprobs: true`), not by the native `/api/generate`.
-The `openai` package in `requirements.txt` exists to talk to that local endpoint.
+Generation streams from Ollama's native chat endpoint with logprobs enabled
+(`src/evaluation/ollama_stream.py`). The model is unloaded after every call: a reused
+prompt cache changes greedy output, so only cold runs reproduce under a fixed seed.
 
 Note that the Gemini API key is a **free-tier developer key from AI Studio**, which is
 separate from and not obtainable via a consumer Gemini or Claude subscription.
