@@ -76,6 +76,15 @@ def test_channel_cannot_change_mid_generation():
     assert not valid_tran(b, a)
 
 
+def test_or_of_valid_states_is_valid():
+    states = enumerate_valid_states()
+    for a in states:
+        for b in states:
+            joined = a | b
+            assert joined.is_semantically_valid()
+            assert a <= joined and b <= joined
+
+
 def test_transition_matrix_is_sparse():
     states = enumerate_valid_states()
     valid = sum(valid_tran(a, b) for a in states for b in states)

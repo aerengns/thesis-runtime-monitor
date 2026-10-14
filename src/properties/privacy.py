@@ -262,6 +262,11 @@ class PrivacyState:
     def __le__(self, other: "PrivacyState") -> bool:
         return all(a <= b for a, b in zip(self.to_bits(), other.to_bits()))
 
+    def __or__(self, other: "PrivacyState") -> "PrivacyState":
+        return PrivacyState(
+            **{n: getattr(self, n) or getattr(other, n) for n in PREDICATE_NAMES}
+        )
+
 
 def valid_tran(source: PrivacyState, target: PrivacyState) -> bool:
     """ProbGuard's ``valid_tran`` relation, derived from predicate monotonicity.
