@@ -1,12 +1,15 @@
-"""Tests for streaming from the model under test, using fake responses."""
+"""Tests for streaming from the model under test."""
 
 from __future__ import annotations
 
+import ollama
 import pytest
 from ollama import ChatResponse, Message
 from ollama._types import Logprob
 
-from src.evaluation.ollama_stream import MAX_TOKENS, collect, generate
+from src.evaluation.agentleak_eval import load_scenarios
+from src.evaluation.agentleak_prompts import build_messages
+from src.evaluation.ollama_stream import DEFAULT_MODEL, MAX_TOKENS, collect, generate
 
 
 def piece(text: str, logprob: float = -0.5) -> ChatResponse:
@@ -74,3 +77,26 @@ def test_generate_requests_deterministic_capped_stream():
     assert client.kwargs["options"] == {
         "temperature": 0, "seed": 7, "num_predict": MAX_TOKENS,
     }
+
+
+def _model_available() -> bool:
+    try:
+        installed = {m.model for m in ollama.Client().list().models}
+    except Exception:
+        return False
+    return DEFAULT_MODEL in installed
+
+
+@pytest.mark.skipif(not _model_available(), reason="ollama or the model is not available")
+def test_back_to_back_generations_are_identical():
+    """Slow (~40s). This scenario drifted when the prompt cache was reused."""
+    scenario = next(
+        s for s in load_scenarios("base") if s.scenario_id == "agentleak_hea_00007"
+    )
+    messages = build_messages(scenario, inject_attack=True)
+    ollama.Client().generate(model=DEFAULT_MODEL, keep_alive=0)
+
+    first = generate(messages, seed=0)
+    second = generate(messages, seed=0)
+
+    assert first.text == second.text
