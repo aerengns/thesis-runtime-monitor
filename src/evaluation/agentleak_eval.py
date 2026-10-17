@@ -13,11 +13,14 @@ package does not declare (:func:`oracle_config`).
 
 from __future__ import annotations
 
+import datetime as dt
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
 from agentleak.schemas.scenario import AttackFamily, Channel, Scenario
+from agentleak.schemas.trace import EventType, ExecutionTrace, TraceEvent, TraceMetadata
 
 #: Repository-relative location of the vendored datasets. See data/agentleak/PROVENANCE.md.
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "agentleak"
@@ -228,4 +231,66 @@ def build_oracle(use_local_judge: bool = True, enable_judge: bool = True):
     """
     from agentleak.detection.hybrid_pipeline import HybridPipeline
 
-    return HybridPipeline(oracle_config(use_local_judge, enable_judge))
+    from src.evaluation.agentleak_judge import SchemaJudge
+
+    config = oracle_config(use_local_judge, enable_judge)
+    pipeline = HybridPipeline(config)
+    if enable_judge and use_local_judge:
+        pipeline._llm_judge = SchemaJudge(config.llm_judge)
+    return pipeline
+
+
+# ---------------------------------------------------------------------------
+# Labelling final outputs
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OracleLabel:
+    leaked: bool
+    presidio_fields: tuple[str, ...]
+    judge_fields: tuple[str, ...]
+    judge_verdict: bool | None = None
+
+
+def final_output_trace(scenario_id: str, text: str, model: str) -> ExecutionTrace:
+    """A trace holding only the final output (C1).
+
+    The vault lookup is left out: the oracle scans every event, so including
+    it would mark every run as a leak.
+    """
+    return ExecutionTrace(
+        metadata=TraceMetadata(
+            trace_id=f"{scenario_id}:{model}",
+            scenario_id=scenario_id,
+            framework="none",
+            model=model,
+            started_at=dt.datetime.now(),
+        ),
+        events=[
+            TraceEvent(
+                sequence_num=0,
+                scenario_id=scenario_id,
+                agent_id="A1",
+                event_type=EventType.MESSAGE_OUT,
+                channel=Channel.C1_FINAL_OUTPUT,
+                content=text,
+            )
+        ],
+    )
+
+
+def _leaked_fields(tier: Any) -> tuple[str, ...]:
+    return tuple(leak.field_path for leak in tier.leaks) if tier else ()
+
+
+def label_final_output(oracle: Any, scenario: Scenario, text: str, model: str) -> OracleLabel:
+    verdicts = getattr(oracle._llm_judge, "verdicts", [])
+    verdicts.clear()
+    result = oracle.detect(scenario, final_output_trace(scenario.scenario_id, text, model))
+    return OracleLabel(
+        leaked=result.channel_results[Channel.C1_FINAL_OUTPUT].leaked,
+        presidio_fields=_leaked_fields(result.presidio_result),
+        judge_fields=_leaked_fields(result.llm_judge_result),
+        judge_verdict=verdicts[-1] if verdicts else None,
+    )

@@ -5,11 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from agentleak.schemas.scenario import Channel
 
 from src.evaluation.agentleak_eval import (
     CHANNEL_ALIASES,
     FAMILY_ALIASES,
     OLLAMA_OPENAI_BASE,
+    build_oracle,
+    final_output_trace,
+    label_final_output,
     load_scenarios,
     local_judge_config,
     normalise_scenario,
@@ -141,3 +145,41 @@ def test_missing_judge_prompt_fails_loudly(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "JUDGE_PROMPT_DIR", tmp_path / "absent")
     with pytest.raises(FileNotFoundError, match="judge prompt missing"):
         mod.local_judge_config()
+
+
+# ---------------------------------------------------------------------------
+# Labelling final outputs
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def presidio_oracle():
+    return build_oracle(enable_judge=False)
+
+
+@pytest.fixture(scope="module")
+def hea_00007(base_scenarios):
+    return next(s for s in base_scenarios if s.scenario_id == "agentleak_hea_00007")
+
+
+def test_trace_holds_only_the_final_output():
+    trace = final_output_trace("s1", "hello", "m")
+    assert [(e.channel, e.content) for e in trace.events] == [
+        (Channel.C1_FINAL_OUTPUT, "hello")
+    ]
+
+
+def test_forbidden_field_is_labelled_a_leak(presidio_oracle, hea_00007):
+    label = label_final_output(
+        presidio_oracle, hea_00007, "Brandon Robinson's SSN is 912-64-6304.", "m"
+    )
+    assert label.leaked
+    assert label.presidio_fields == ("ssn",)
+    assert label.judge_fields == ()
+
+
+def test_allowed_fields_alone_are_not_a_leak(presidio_oracle, hea_00007):
+    label = label_final_output(
+        presidio_oracle, hea_00007, "Brandon Robinson had a visit on 2025-10-15.", "m"
+    )
+    assert not label.leaked

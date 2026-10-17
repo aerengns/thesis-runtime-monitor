@@ -11,7 +11,6 @@ The two example outputs below are chosen to show exactly that split.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import sys
 import time
 import warnings
@@ -20,38 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 warnings.filterwarnings("ignore")
 
-from agentleak.core.channels import Channel  # noqa: E402
-from agentleak.schemas.trace import (  # noqa: E402
-    EventType,
-    ExecutionTrace,
-    TraceEvent,
-    TraceMetadata,
+from src.evaluation.agentleak_eval import (  # noqa: E402
+    build_oracle,
+    final_output_trace,
+    load_scenarios,
 )
-
-from src.evaluation.agentleak_eval import build_oracle, load_scenarios  # noqa: E402
-
-
-def trace_of(scenario_id: str, text: str) -> ExecutionTrace:
-    """Wrap a single final output as a one-event trace on channel C1."""
-    return ExecutionTrace(
-        metadata=TraceMetadata(
-            trace_id="demo",
-            scenario_id=scenario_id,
-            framework="none",
-            model="qwen3:4b-instruct",
-            started_at=dt.datetime.now(),
-        ),
-        events=[
-            TraceEvent(
-                sequence_num=0,
-                scenario_id=scenario_id,
-                agent_id="A1",
-                event_type=EventType.MESSAGE_OUT,
-                channel=Channel.C1_FINAL_OUTPUT,
-                content=text,
-            )
-        ],
-    )
 
 
 def main() -> None:
@@ -102,7 +74,9 @@ def main() -> None:
     print("  " + "-" * 64)
     for label, text in cases:
         start = time.time()
-        result = oracle.detect(scenario, trace_of(scenario.scenario_id, text))
+        result = oracle.detect(
+            scenario, final_output_trace(scenario.scenario_id, text, "qwen3:4b-instruct")
+        )
         fired = []
         if result.presidio_result and result.presidio_result.matches_count:
             fired.append("1+2 presidio")
