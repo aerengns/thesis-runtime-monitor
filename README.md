@@ -1,100 +1,136 @@
 # thesis-runtime-monitor
 
-A runtime monitoring system for LLM behaviour targeting three human-centred properties:
-**factuality**, **fairness**, and **privacy**. The system has two layers. Layer 1 is a
-*probabilistic monitor* (ProbGuard-style): from a prefix of an LLM output stream or agent
-action trace it estimates the probability that the completed output will violate a property
-threshold, using a Discrete-Time Markov Chain learned from execution traces and checked
-against CTL specifications. Layer 2 is a *declarative enforcement engine* (AgentSpec-style):
-property-specific mitigation rules written in a small DSL, dispatching actions such as block,
-rewrite, redact, and flag.
+Master's thesis project: a runtime monitor that reads an LLM's output **while it is being
+generated** and predicts whether the finished output will violate a property, applied to
+**factuality**, **fairness** and **privacy**.
 
-The two layers are joined by a **probability-graded mitigation interface**: outputs below a
-low threshold pass through untouched, outputs above a high threshold are blocked or rewritten,
-and the band in between is flagged or warned. That integration, plus the application of this
-architecture to factuality, fairness, and privacy properties neither source system addresses
-is the contribution of this thesis. Evaluation compares the combined system against three
-baselines (no monitoring, enforcement only, prediction only) using OpenFactCheck for factuality,
-FairEval for fairness, and AgentLeak for privacy.
+## Overview
 
-## Quick start
+The system has two layers. Layer 1 is a *probabilistic monitor* (ProbGuard-style): it
+abstracts each prefix of the output stream into a symbolic state and, using a Discrete-Time
+Markov Chain learned from execution traces, estimates the probability that the completed
+output will violate the property. Layer 2 is a *declarative enforcement engine*
+(AgentSpec-style): property-specific rules written in a small DSL that block, rewrite,
+redact or flag output.
 
-Everything routine is a `make` target. Run `make` on its own for the full list.
+The two layers are joined by a **probability-graded interface**: outputs below a low
+threshold pass through, outputs above a high threshold are blocked or rewritten, and the
+band in between is flagged. That integration, plus its application to factuality, fairness
+and privacy (properties neither source system addresses), is the contribution of this
+thesis. Evaluation compares the combined system against three baselines (no monitoring,
+enforcement only, prediction only) using OpenFactCheck, FairEval and AgentLeak.
+
+Privacy is being built first, end to end, before factuality and fairness.
+
+## Current status
+
+| Part | State |
+|---|---|
+| Privacy predicates: 5 Boolean predicates per prefix, 22 abstract states, invariant `AG !(binding_established & boundary_crossing)` | built |
+| AgentLeak scenario loading and ground-truth oracle (Presidio + LLM judge on local Ollama) | built |
+| Trace pipeline: AgentLeak prompts, streamed generation, one abstract state per token, labelling of the final output | built |
+| Persisting runs and the batch runner | next |
+| DTMC, P(violation), graded interface | planned |
+| Layer 2 rule DSL, engine and mitigations | planned |
+| Factuality and fairness | planned |
+
+`make status` prints this live from the code. The test suite has 61 tests.
+
+## Setup
+
+Requirements: macOS or Linux, Python 3.11, and [Ollama](https://ollama.com) (tested with
+0.34; older versions do not return token logprobs). Developed on an Apple M2 with 8 GB RAM.
 
 ```bash
-make install     # venv + dependencies + spaCy model
-cp .env.example .env
-make check       # verify python, packages, benchmark data, ollama
-make status      # what is built vs still an empty stub
-make demo        # watch the privacy predicates escalate as text streams in
-make test        # run the test suite
+make install                 # venv, dependencies and the spaCy model
+cp .env.example .env         # optional: only needed for the Gemini key (see below)
+
+brew install ollama          # or https://ollama.com/download
+ollama serve &               # or: make ollama
+ollama pull qwen3:4b-instruct
+
+make check                   # verify Python, packages, benchmark data and Ollama
+make test                    # run the test suite
 ```
 
-| Target | What it does |
-|---|---|
-| `make status` | which pipeline stages are built, which are empty, plus git state |
-| `make check` | environment health check; exits non-zero if something required is missing |
-| `make demo` | the five privacy predicates switching on across a growing prefix (no LLM needed) |
-| `make oracle` | grade example outputs with all three detection tiers (starts ollama; ~40 s per case on an M2/8 GB with Qwen3 4B, so ~2 min for the three cases — the judge has no on-disk cache, so every run pays this again) |
-| `make oracle-fast` | tiers 1–2 only: instant, but misses paraphrased leaks |
-| `make scenarios` | summarise the benchmark splits |
-| `make ollama` / `ollama-stop` | start or stop the local model server |
-
-Scripts behind these targets live in `scripts/`; the Makefile is written for
-GNU Make 3.81 (the version macOS ships), so multi-line logic lives in the
-scripts rather than in recipes.
-
-## Setup (manual equivalent of `make install`)
+Manual equivalent of `make install`:
 
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-cp .env.example .env
 ```
 
-### LLM backends
+The AgentLeak benchmark data is already included in `data/agentleak/`, so no download is
+needed.
 
-No paid API account is required. The two roles are served by different backends:
+## Common commands
 
-| Role | Backend | Why |
-|---|---|---|
-| **System under test** — generates the traces Layer 1 learns its DTMC from, and performs Layer 2 rewrites | Local `qwen3:4b-instruct` via [Ollama](https://ollama.com) | Free at unlimited volume, reproducible under a fixed seed (cold runs, see below), and exposes token logprobs for state abstraction |
-| **Judge** — OpenFactCheck / FairEval scoring | Gemini, free-tier key from [Google AI Studio](https://aistudio.google.com/apikey) | Higher quality where it matters; evaluation volume fits the free rate limits |
+Run `make` on its own for the full list.
 
-```bash
-brew install ollama          # or https://ollama.com/download
-ollama serve &
-ollama pull qwen3:4b-instruct
-```
+| Target | What it does |
+|---|---|
+| `make status` | which pipeline stages are built and which are still empty, plus git state |
+| `make check` | environment health check; exits non-zero if something required is missing |
+| `make demo` | the five privacy predicates switching on across a growing prefix (no LLM needed) |
+| `make oracle` | grade example outputs with all detection tiers (starts Ollama; ~40 s per case on an M2/8 GB, and the judge keeps no cache between runs) |
+| `make oracle-fast` | Presidio only: instant, but misses paraphrased leaks |
+| `make scenarios` | summarise the benchmark splits |
+| `make test` | run the test suite |
+| `make ollama` / `make ollama-stop` | start or stop the local model server |
 
-Generation streams from Ollama's native chat endpoint with logprobs enabled
-(`src/evaluation/ollama_stream.py`). The model is unloaded after every call: a reused
-prompt cache changes greedy output, so only cold runs reproduce under a fixed seed.
+The Makefile is written for GNU Make 3.81 (the version macOS ships), so multi-line logic
+lives in `scripts/`.
 
-Note that the Gemini API key is a **free-tier developer key from AI Studio**, which is
-separate from and not obtainable via a consumer Gemini or Claude subscription.
+## Models
 
-Because the system under test is a 4B local model rather than a frontier model, absolute
-scores are not comparable to figures published alongside OpenFactCheck, FairEval, or
-AgentLeak. The evaluation is internally consistent: all four configurations (no monitoring,
-enforcement only, prediction only, combined) run against the same SUT.
+No paid API account is required.
+
+| Role | Backend |
+|---|---|
+| **System under test** | Local `qwen3:4b-instruct` via Ollama |
+| **Privacy judge** (AgentLeak's semantic tier) | The same local model, constrained to the JSON format AgentLeak's judge prompt asks for |
+| **Cross-check and later evaluation** (OpenFactCheck, FairEval) | Gemini, via a free-tier key from [Google AI Studio](https://aistudio.google.com/apikey) in `.env` |
+
+Generation runs at temperature 0 with a fixed seed, and the model is unloaded after every
+call: a reused prompt cache changed greedy output for the same seed, so only cold runs
+reproduce.
+
+Because the system under test is a 4B local model, absolute scores are not comparable to
+figures published with the benchmarks. The evaluation is internally consistent: all four
+configurations run against the same model.
+
+## Notes on the AgentLeak benchmark
+
+AgentLeak is pinned to commit `1301eb9` and its data is vendored (see
+`data/agentleak/PROVENANCE.md`). Six problems in the released code are worked around and
+documented where they are handled:
+
+1. The released datasets do not validate against the package's own schema
+   (`normalise_scenario` in `src/evaluation/agentleak_eval.py`).
+2. Presidio is required but not declared as a dependency; without it nothing is detected.
+3. The judge's prompt files are missing from the installed package (vendored in
+   `data/agentleak/prompts/`).
+4. The judge's "disk-based" cache only lives in memory, so labels must be persisted by us.
+5. The runner never injects the attack payload into the prompt
+   (`src/evaluation/agentleak_prompts.py` adds an explicit switch).
+6. The judge's verdict can be silently lost in parsing (`src/evaluation/agentleak_judge.py`
+   constrains its output format and records its verdict).
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `src/monitor/` | Layer 1 — DTMC, CTL checking, state abstraction, orchestrator |
-| `src/enforcement/` | Layer 2 — rule DSL parser, rule engine, mitigation actions |
+| `src/properties/` | Predicates per property (`privacy.py` is built) |
+| `src/monitor/` | Layer 1: state abstraction (built), DTMC, CTL checking, monitor |
+| `src/evaluation/` | Benchmark loading, prompts, streaming, oracle and judge |
 | `src/interface/` | Probability → enforcement action bridge |
-| `src/properties/` | Detection signals for factuality, fairness, privacy |
-| `src/evaluation/` | Benchmark harnesses (OpenFactCheck, FairEval, AgentLeak) |
+| `src/enforcement/` | Layer 2: rule DSL parser, rule engine, mitigation actions |
 | `rules/` | DSL rule files, one per property |
 | `tests/` | pytest suite |
-| `notebooks/` | Exploratory analysis |
 | `scripts/` | Helper scripts invoked by the Makefile |
-| `data/agentleak/` | Vendored AgentLeak benchmark — see its `PROVENANCE.md` |
+| `data/agentleak/` | Vendored AgentLeak benchmark and judge prompts |
+| `docs/` | Design notes (`01-layer1-design.md`: what ProbGuard and AgentSpec specify) |
 | `papers/` | The five reference papers (ProbGuard, AgentSpec, OpenFactCheck, FairEval, AgentLeak) |
-
-Status: scaffolding only — no logic implemented yet.
+| `notebooks/` | Exploratory analysis |
